@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1e40af">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Escala de Serviço Ordinário 39º BPM</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        /* Estilos para o scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px;}
+        ::-webkit-scrollbar-thumb { background: #888; border-radius: 10px;}
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
+        .modal { display: none; }
+        .modal.active { display: flex; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-6">
+
+        <!-- CABEÇALHO -->
+        <header class="bg-white shadow-md rounded-lg p-4 mb-6 flex flex-col md:flex-row justify-between items-center">
+            <div>
+                <h1 id="mainTitle" class="text-2xl md:text-3xl font-bold text-gray-700">Escala de Serviço Ordinário 39º BPM</h1>
+                <p id="mainSubtitle" class="text-gray-500">Gerenciamento de escalas e efetivo</p>
+            </div>
+            <div id="admin-buttons" class="flex items-center flex-wrap justify-center gap-2 mt-4 md:mt-0">
+                <button onclick="openModal('modalDivulgar')" class="bg-orange-500 text-white font-semibold px-4 py-2 rounded-lg shadow hover:bg-orange-600 transition duration-200">Divulgar Escala</button>
+                <button onclick="openModal('modalEfetivo')" class="bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg shadow hover:bg-blue-700 transition duration-200">Gerenciar Efetivo</button>
+                <button onclick="openModal('modalAfastamentos')" class="bg-green-600 text-white font-semibold px-4 py-2 rounded-lg shadow hover:bg-green-700 transition duration-200">Gerenciar Afastamentos</button>
+                
+                <div class="border-l ml-2 pl-2 flex items-center space-x-2">
+                    <button id="importDataBtn" title="Importar dados de um backup" class="bg-gray-200 text-gray-700 p-2 rounded-lg shadow hover:bg-gray-300 transition duration-200">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                    </button>
+                    <button id="exportDataBtn" title="Exportar dados para um arquivo de backup" class="bg-gray-200 text-gray-700 p-2 rounded-lg shadow hover:bg-gray-300 transition duration-200">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                    </button>
+                    <input type="file" id="importFile" accept=".json" class="hidden">
+                </div>
+            </div>
+        </header>
+
+        <!-- CONTROLE DE NAVEGAÇÃO DO CALENDÁRIO -->
+        <div class="bg-white shadow-md rounded-lg p-4 mb-6 flex justify-between items-center">
+            <button id="prevMonth" class="p-2 rounded-full hover:bg-gray-200 transition">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
+            </button>
+            <h2 id="currentMonthYear" class="text-xl font-bold text-center"></h2>
+            <button id="nextMonth" class="p-2 rounded-full hover:bg-gray-200 transition">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
+            </button>
+        </div>
+        
+        <!-- LEGENDA DAS EQUIPES -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-6 text-center text-sm font-semibold">
+            <div class="p-2 rounded-lg bg-slate-200 text-slate-800 border border-slate-300">Equipe A</div>
+            <div class="p-2 rounded-lg bg-gray-200 text-gray-800 border border-gray-300">Equipe B</div>
+            <div class="p-2 rounded-lg bg-zinc-200 text-zinc-800 border border-zinc-300">Equipe C</div>
+            <div class="p-2 rounded-lg bg-neutral-200 text-neutral-800 border border-neutral-300">Equipe D</div>
+        </div>
+
+
+        <!-- GRID DO CALENDÁRIO -->
+        <div id="calendar" class="grid grid-cols-1 gap-6">
+            <!-- Os dias do calendário serão inseridos aqui via JavaScript -->
+        </div>
+
+    </div>
+
+    <!-- MODAL: DIVULGAR ESCALA -->
+    <div id="modalDivulgar" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center p-4">
+        <div class="bg-white rounded-lg shadow-2xl w-full max-w-2xl">
+            <div class="p-4 border-b flex justify-between items-center">
+                <h3 class="text-xl font-bold">Gerar PDF da Escala</h3>
+                <button onclick="closeModal('modalDivulgar')" class="p-2 rounded-full hover:bg-gray-200">&times;</button>
+            </div>
+            <div class="p-6">
+                <p class="text-gray-600 mb-4">Selecione o período que deseja incluir no arquivo PDF da escala.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div>
+                        <label for="pdfStartDate" class="block text-sm font-medium text-gray-700">Data de Início</label>
+                        <input type="date" id="pdfStartDate" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border">
+                    </div>
+                    <div>
+                        <label for="pdfEndDate" class="block text-sm font-medium text-gray-700">Data de Fim</label>
+                        <input type="date" id="pdfEndDate" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border">
+                    </div>
+                </div>
+                <div class="text-center">
+                     <button onclick="exportToPDF()" class="bg-indigo-600 text-white font-semibold px-6 py-3 rounded-lg shadow hover:bg-indigo-700 transition">
+                        Gerar e Salvar PDF
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: GERENCIAR EFETIVO -->
+    <div id="modalEfetivo" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center p-4">
+        <div class="bg-white rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+            <div class="p-4 border-b flex justify-between items-center">
+                <h3 class="text-xl font-bold">Gerenciar Efetivo</h3>
+                <button onclick="closeModal('modalEfetivo')" class="p-2 rounded-full hover:bg-gray-200">&times;</button>
+            </div>
+            <div class="p-4 flex-grow overflow-y-auto">
+                <!-- Seção de Importação -->
+                <div class="mb-4 p-4 border rounded-lg bg-gray-50">
+                    <h4 class="font-semibold text-lg mb-2">Importar Efetivo via Planilha</h4>
+                     <p class="text-sm text-gray-600 mb-3">
+                        Envie um arquivo <strong>CSV</strong> com as colunas: <code>Ordem</code>, <code>Graduação/Posto</code>, <code>RG</code>, <code>Nome Completo</code>, <code>CPF</code>, <code>Função</code>, <code>Observação</code>, <code>Equipe</code>.
+                    </p>
+                    <div class="flex items-center space-x-4">
+                        <button id="selectCsvBtn" class="bg-teal-600 text-white px-4 py-2 rounded-md hover:bg-teal-700 transition duration-200">
+                            Selecionar Arquivo...
+                        </button>
+                        <span id="csvFileName" class="text-gray-600 italic">Nenhum arquivo selecionado.</span>
+                    </div>
+                    <button id="saveImportBtn" class="mt-4 bg-blue-600 text-white font-semibold px-5 py-2 rounded-lg shadow hover:bg-blue-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>
+                        Salvar Importação da Planilha
+                    </button>
+                    <input type="file" id="csvFile" accept=".csv" class="hidden">
+                </div>
+
+                <!-- Formulário para adicionar/editar policial -->
+                <form id="formEfetivo" class="mb-4 p-4 border rounded-lg bg-gray-50">
+                    <h4 class="font-semibold text-lg mb-2">Adicionar/Editar Manualmente</h4>
+                    <input type="hidden" id="policialId">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <input type="text" id="policialOrdem" placeholder="Ordem (ex: 1 ou P)" class="p-2 border rounded-md">
+                        <select id="policialGraduacao" class="p-2 border rounded-md">
+                            <option value="">Selecione a Graduação/Posto</option>
+                            <option value="Coronel PM">Coronel PM</option>
+                            <option value="Tenente-Coronel PM">Tenente-Coronel PM</option>
+                            <option value="Major PM">Major PM</option>
+                            <option value="Capitão PM">Capitão PM</option>
+                            <option value="1º Tenente PM">1º Tenente PM</option>
+                            <option value="2º Tenente PM">2º Tenente PM</option>
+                            <option value="Subtenente PM">Subtenente PM</option>
+                            <option value="1º Sargento PM">1º Sargento PM</option>
+                            <option value="2º Sargento PM">2º Sargento PM</option>
+                            <option value="3º Sargento PM">3º Sargento PM</option>
+                            <option value="Cabo PM">Cabo PM</option>
+                            <option value="Soldado PM">Soldado PM</option>
+                        </select>
+                        <input type="text" id="policialRG" placeholder="RG" class="p-2 border rounded-md">
+                        <input type="text" id="policialNome" placeholder="Nome Completo" class="p-2 border rounded-md col-span-1 md:col-span-2" required>
+                        <input type="text" id="policialCPF" placeholder="CPF" class="p-2 border rounded-md">
+                        <select id="policialEquipe" class="p-2 border rounded-md" required>
+                            <option value="">Selecione a Equipe</option>
+                            <option value="A">Equipe A</option>
+                            <option value="B">Equipe B</option>
+                            <option value="C">Equipe C</option>
+                            <option value="D">Equipe D</option>
+                        </select>
+                        <input type="text" id="policialFuncao" placeholder="Função" class="p-2 border rounded-md col-span-1 md:col-span-2">
+                        <textarea id="policialObservacao" placeholder="Observação" class="p-2 border rounded-md col-span-1 md:col-span-4" rows="2"></textarea>
+                    </div>
+                    <div class="flex justify-end space-x-2 mt-4">
+                         <button type="button" onclick="clearForm('formEfetivo')" class="bg-gray-300 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-400">Limpar</button>
+                        <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">Salvar Policial</button>
+                    </div>
+                </form>
+                <!-- Lista de policiais -->
+                <div id="listaEfetivo"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: GERENCIAR AFASTAMENTOS -->
+    <div id="modalAfastamentos" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center p-4">
+        <div class="bg-white rounded-lg shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+            <div class="p-4 border-b flex justify-between items-center">
+                <h3 class="text-xl font-bold">Gerenciar Afastamentos</h3>
+                <button onclick="closeModal('modalAfastamentos')" class="p-2 rounded-full hover:bg-gray-200">&times;</button>
+            </div>
+            <div class="p-4 flex-grow overflow-y-auto">
+                <!-- Formulário para adicionar/editar afastamento -->
+                <form id="formAfastamento" class="mb-4 p-4 border rounded-lg bg-gray-50">
+                    <input type="hidden" id="afastamentoId">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                       <select id="afastamentoPolicial" class="p-2 border rounded-md" required></select>
+                        <select id="afastamentoMotivo" class="p-2 border rounded-md" required>
+                            <option value="">Selecione o Motivo</option>
+                            <option>Férias</option>
+                            <option>Atestado Médico</option>
+                            <option>Licença Especial</option>
+                            <option>Licença Maternidade</option>
+                            <option>Licença Paternidade</option>
+                            <option>Dispensa Recompensa</option>
+                            <option>Curso</option>
+                            <option>Outro</option>
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-600">Data de Início</label>
+                            <input type="date" id="afastamentoInicio" class="p-2 border rounded-md w-full" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-600">Data de Fim</label>
+                            <input type="date" id="afastamentoFim" class="p-2 border rounded-md w-full" required>
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-2 mt-4">
+                        <button type="button" onclick="clearForm('formAfastamento')" class="bg-gray-300 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-400">Limpar</button>
+                        <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700">Salvar Afastamento</button>
+                    </div>
+                </form>
+                <!-- Lista de afastamentos -->
+                <div id="listaAfastamentos"></div>
+            </div>
+        </div>
+    </div>
+
+
+<script>
+    // ESTADO DA APLICAÇÃO
+    let state = {
+        currentDate: new Date(),
+        efetivo: [],
+        afastamentos: []
+    };
+
+    // CONFIGURAÇÃO
+    const EQUIPES = ['A', 'B', 'C', 'D'];
+    const EQUIPE_CORES = {
+        'A': { bg: 'bg-slate-200', text: 'text-slate-800', border: 'border-slate-300' },
+        'B': { bg: 'bg-gray-200', text: 'text-gray-800', border: 'border-gray-300' },
+        'C': { bg: 'bg-zinc-200', text: 'text-zinc-800', border: 'border-zinc-300' },
+        'D': { bg: 'bg-neutral-200', text: 'text-neutral-800', border: 'border-neutral-300' },
+    };
+    const DATA_REFERENCIA = new Date(2025, 8, 1);
+    const EQUIPE_REFERENCIA_INDEX = 2;
+
+    // ELEMENTOS DO DOM
+    const calendarEl = document.getElementById('calendar');
+    const currentMonthYearEl = document.getElementById('currentMonthYear');
+    const prevMonthBtn = document.getElementById('prevMonth');
+    const nextMonthBtn = document.getElementById('nextMonth');
+    const formEfetivo = document.getElementById('formEfetivo');
+    const formAfastamento = document.getElementById('formAfastamento');
+    const selectCsvBtn = document.getElementById('selectCsvBtn');
+    const saveImportBtn = document.getElementById('saveImportBtn');
+    const csvFileName = document.getElementById('csvFileName');
+    const csvFileInput = document.getElementById('csvFile');
+    const importDataBtn = document.getElementById('importDataBtn');
+    const exportDataBtn = document.getElementById('exportDataBtn');
+    const importFileInput = document.getElementById('importFile');
+    const adminButtons = document.getElementById('admin-buttons');
+    const mainTitle = document.getElementById('mainTitle');
+    const mainSubtitle = document.getElementById('mainSubtitle');
+
+
+    // --- LÓGICA PRINCIPAL ---
+    const diffDays = (date1, date2) => {
+        const oneDay = 24 * 60 * 60 * 1000;
+        const d1 = new Date(date1.getFullYear(), date1.getMonth(), date1.getDate());
+        const d2 = new Date(date2.getFullYear(), date2.getMonth(), date2.getDate());
+        return Math.round(Math.abs((d1 - d2) / oneDay));
+    };
+
+    const getEquipeDoDia = (date) => {
+        const diasDesdeReferencia = diffDays(date, DATA_REFERENCIA);
+        let indiceEquipe;
+        if (date < DATA_REFERENCIA) {
+            indiceEquipe = (EQUIPE_REFERENCIA_INDEX - (diasDesdeReferencia % EQUIPES.length) + EQUIPES.length) % EQUIPES.length;
+        } else {
+            indiceEquipe = (EQUIPE_REFERENCIA_INDEX + diasDesdeReferencia) % EQUIPES.length;
+        }
+        return EQUIPES[indiceEquipe];
+    };
+    
+    const getAfastamentoInfo = (policialId, date) => {
+        return state.afastamentos.find(afastamento => {
+            if (afastamento.policialId !== policialId) return false;
+            const inicio = new Date(afastamento.inicio + 'T00:00:00');
+            const fim = new Date(afastamento.fim + 'T23:59:59');
+            return date >= inicio && date <= fim;
+        });
+    };
+    
+    const customSort = (a, b) => {
+        const isAP = a.ordem?.toString().toUpperCase() === 'P';
+        const isBP = b.ordem?.toString().toUpperCase() === 'P';
+
+        if (isAP && isBP) return a.nome.localeCompare(b.nome);
+        if (isAP) return 1;
+        if (isBP) return -1;
+
+        const ordemA = a.ordem && !isNaN(parseInt(a.ordem)) ? parseInt(a.ordem) : Infinity;
+        const ordemB = b.ordem && !isNaN(parseInt(b.ordem)) ? parseInt(b.ordem) : Infinity;
+
+        if (ordemA !== ordemB) return ordemA - ordemB;
+        
+        return a.nome.localeCompare(b.nome);
+    };
+
+    const renderCalendar = () => {
+        calendarEl.innerHTML = '';
+        const year = state.currentDate.getFullYear();
+        const month = state.currentDate.getMonth();
+        const monthName = state.currentDate.toLocaleString('pt-BR', { month: 'long' });
+
+        currentMonthYearEl.textContent = `${monthName.charAt(0).toUpperCase() + monthName.slice(1)} de ${year}`;
+
+        const diasNoMes = new Date(year, month + 1, 0).getDate();
+
+        for (let dia = 1; dia <= diasNoMes; dia++) {
+            const date = new Date(year, month, dia);
+            const diaSemana = date.toLocaleString('pt-BR', { weekday: 'long' }).replace(/^\w/, c => c.toUpperCase());
+            
+            const equipeServico = getEquipeDoDia(date);
+            const cores = EQUIPE_CORES[equipeServico];
+
+            const efetivoDaEquipeOriginal = state.efetivo.filter(p => p.equipe === equipeServico);
+
+            const ativosNumerados = [];
+            const ativosPlantonistas = [];
+            const afastados = [];
+
+            efetivoDaEquipeOriginal.forEach(policial => {
+                const afastamentoInfo = getAfastamentoInfo(policial.id, date);
+                if (afastamentoInfo) {
+                    afastados.push({ ...policial, afastamentoInfo });
+                } else {
+                    if (policial.ordem?.toString().toUpperCase() === 'P') {
+                        ativosPlantonistas.push(policial);
+                    } else {
+                        ativosNumerados.push(policial);
+                    }
+                }
+            });
+
+            ativosNumerados.sort(customSort);
+            ativosPlantonistas.sort((a, b) => a.nome.localeCompare(b.nome));
+            afastados.sort((a, b) => a.nome.localeCompare(b.nome));
+
+            const efetivoDoDiaOrdenado = [...ativosNumerados, ...ativosPlantonistas, ...afastados];
+            
+            let numeroOrdem = 1;
+            let efetivoHtml = efetivoDoDiaOrdenado.map((policial) => {
+                const isAfastado = !!policial.afastamentoInfo;
+                const isPlantonista = !isAfastado && policial.ordem?.toString().toUpperCase() === 'P';
+
+                const rowClass = isAfastado ? 'line-through text-gray-500 bg-red-50' : '';
+                const observacao = isAfastado ? policial.afastamentoInfo.motivo.toUpperCase() : (policial.observacao || '');
+                
+                let ordemDisplay = '';
+                if (!isAfastado) {
+                    if (isPlantonista) {
+                        ordemDisplay = 'P';
+                    } else {
+                        ordemDisplay = numeroOrdem++;
+                    }
+                }
+                
+                return `
+                    <tr class="${rowClass}">
+                        <td class="p-1.5 w-8 text-center font-semibold">${ordemDisplay}</td>
+                        <td class="p-1.5">${policial.graduacao || ''}</td>
+                        <td class="p-1.5">${policial.rg || ''}</td>
+                        <td class="p-1.5 font-medium">${policial.nome}</td>
+                        <td class="p-1.5">${policial.cpf || ''}</td>
+                        <td class="p-1.5">${policial.funcao || ''}</td>
+                        <td class="p-1.5 font-semibold text-red-700">${observacao}</td>
+                    </tr>
+                `;
+            }).join('');
+            
+            if (efetivoDoDiaOrdenado.length === 0) {
+                efetivoHtml = '<tr><td colspan="7" class="p-4 text-center text-gray-500">Nenhum policial nesta equipe.</td></tr>';
+            }
+
+            const cardDia = `
+                <div class="bg-white rounded-lg shadow-md flex flex-col">
+                    <div class="p-3 text-center font-bold text-xl ${cores.text} ${cores.bg}">
+                        EQUIPE ${equipeServico}
+                    </div>
+                    <div class="p-2 text-center text-sm font-medium text-gray-600 border-b">
+                        ${diaSemana}, ${dia} de ${monthName} de ${year}
+                    </div>
+                    <div class="p-2 flex-grow overflow-x-auto">
+                        <table class="w-full text-xs text-left">
+                            <thead class="bg-gray-100">
+                                <tr>
+                                    <th class="p-1.5 font-bold">ORD.</th>
+                                    <th class="p-1.5 font-bold">GRADUAÇÃO/POSTO</th>
+                                    <th class="p-1.5 font-bold">RG</th>
+                                    <th class="p-1.5 font-bold">NOME COMPLETO</th>
+                                    <th class="p-1.5 font-bold">CPF</th>
+                                    <th class="p-1.5 font-bold">FUNÇÃO</th>
+                                    <th class="p-1.5 font-bold">OBSERVAÇÃO</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${efetivoHtml}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+            calendarEl.innerHTML += cardDia;
+        }
+    };
+    
+    // --- GERENCIAMENTO DO EFETIVO ---
+    const renderEfetivo = () => {
+        const listaEfetivoEl = document.getElementById('listaEfetivo');
+        listaEfetivoEl.innerHTML = '<h4 class="font-semibold mb-2">Efetivo Cadastrado:</h4>';
+        if (state.efetivo.length === 0) {
+            listaEfetivoEl.innerHTML += '<p class="text-gray-500">Nenhum policial cadastrado.</p>';
+            return;
+        }
+        
+        const table = document.createElement('table');
+        table.className = 'w-full text-left text-sm';
+        table.innerHTML = `
+            <thead class="bg-gray-100">
+                <tr>
+                    <th class="p-2 w-16">Ordem</th>
+                    <th class="p-2">Graduação/Posto</th>
+                    <th class="p-2">Nome Completo</th>
+                    <th class="p-2 w-20">Equipe</th>
+                    <th class="p-2">Ações</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        `;
+        const tbody = table.querySelector('tbody');
+        
+        state.efetivo.sort(customSort).forEach(p => {
+            const row = document.createElement('tr');
+            row.className = 'border-b';
+            row.innerHTML = `
+                <td class="p-2 text-center">${p.ordem || ''}</td>
+                <td class="p-2">${p.graduacao || ''}</td>
+                <td class="p-2">${p.nome}</td>
+                <td class="p-2 text-center">
+                    <span class="font-semibold text-white px-2 py-1 rounded-full text-xs ${EQUIPE_CORES[p.equipe].bg.replace('100', '500')}">${p.equipe}</span>
+                </td>
+                <td class="p-2">
+                    <button onclick="editPolicial('${p.id}')" class="text-blue-600 hover:underline mr-2">Editar</button>
+                    <button onclick="deletePolicial('${p.id}')" class="text-red-600 hover:underline">Excluir</button>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+        
+        listaEfetivoEl.appendChild(table);
+    };
+
+    formEfetivo.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const id = document.getElementById('policialId').value;
+        const ordem = document.getElementById('policialOrdem').value;
+        const graduacao = document.getElementById('policialGraduacao').value;
+        const rg = document.getElementById('policialRG').value;
+        const nome = document.getElementById('policialNome').value;
+        const cpf = document.getElementById('policialCPF').value;
+        const funcao = document.getElementById('policialFuncao').value;
+        const observacao = document.getElementById('policialObservacao').value;
+        const equipe = document.getElementById('policialEquipe').value;
+
+        const policialData = { ordem, graduacao, rg, nome, cpf, funcao, observacao, equipe };
+
+        if (id) {
+            const index = state.efetivo.findIndex(p => p.id === id);
+            state.efetivo[index] = { ...state.efetivo[index], ...policialData };
+        } else {
+            state.efetivo.push({ id: Date.now().toString(), ...policialData });
+        }
+        
+        saveState();
+        renderEfetivo();
+        renderCalendar();
+        formEfetivo.reset();
+        document.getElementById('policialId').value = '';
+    });
+
+    window.editPolicial = (id) => {
+        const policial = state.efetivo.find(p => p.id === id);
+        document.getElementById('policialId').value = policial.id;
+        document.getElementById('policialOrdem').value = policial.ordem || '';
+        document.getElementById('policialGraduacao').value = policial.graduacao || '';
+        document.getElementById('policialRG').value = policial.rg || '';
+        document.getElementById('policialNome').value = policial.nome;
+        document.getElementById('policialCPF').value = policial.cpf || '';
+        document.getElementById('policialFuncao').value = policial.funcao || '';
+        document.getElementById('policialObservacao').value = policial.observacao || '';
+        document.getElementById('policialEquipe').value = policial.equipe;
+    };
+    
+    window.deletePolicial = (id) => {
+        if (confirm('Tem certeza que deseja excluir este policial?')) {
+            state.efetivo = state.efetivo.filter(p => p.id !== id);
+            state.afastamentos = state.afastamentos.filter(a => a.policialId !== id);
+            saveState();
+            renderEfetivo();
+            renderCalendar();
+        }
+    };
+
+    // --- GERENCIAMENTO DE AFASTAMENTOS ---
+    const renderAfastamentos = () => {
+        const listaAfastamentosEl = document.getElementById('listaAfastamentos');
+        const selectPolicialEl = document.getElementById('afastamentoPolicial');
+        
+        listaAfastamentosEl.innerHTML = '<h4 class="font-semibold mb-2">Afastamentos Registrados:</h4>';
+        selectPolicialEl.innerHTML = '<option value="">Selecione um Policial</option>';
+        
+        state.efetivo.sort((a,b) => a.nome.localeCompare(b.nome)).forEach(p => {
+             selectPolicialEl.innerHTML += `<option value="${p.id}">${p.nome}</option>`;
+        });
+
+        if (state.afastamentos.length === 0) {
+            listaAfastamentosEl.innerHTML += '<p class="text-gray-500">Nenhum afastamento registrado.</p>';
+            return;
+        }
+
+        const table = document.createElement('table');
+        table.className = 'w-full text-left text-sm';
+        table.innerHTML = `
+            <thead class="bg-gray-100">
+                <tr>
+                    <th class="p-2">Policial</th>
+                    <th class="p-2">Motivo</th>
+                    <th class="p-2">Início</th>
+                    <th class="p-2">Fim</th>
+                    <th class="p-2">Ações</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        `;
+        const tbody = table.querySelector('tbody');
+
+        state.afastamentos
+            .sort((a,b) => new Date(b.inicio) - new Date(a.inicio))
+            .forEach(a => {
+            const policial = state.efetivo.find(p => p.id === a.policialId);
+            const row = document.createElement('tr');
+            row.className = 'border-b';
+            row.innerHTML = `
+                <td class="p-2">${policial ? policial.nome : 'Policial Excluído'}</td>
+                <td class="p-2">${a.motivo}</td>
+                <td class="p-2">${new Date(a.inicio + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
+                <td class="p-2">${new Date(a.fim + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
+                <td class="p-2">
+                    <button onclick="editAfastamento('${a.id}')" class="text-blue-600 hover:underline mr-2">Editar</button>
+                    <button onclick="deleteAfastamento('${a.id}')" class="text-red-600 hover:underline">Excluir</button>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+        
+        listaAfastamentosEl.appendChild(table);
+    };
+
+    formAfastamento.addEventListener('submit', e => {
+        e.preventDefault();
+        const id = document.getElementById('afastamentoId').value;
+        const policialId = document.getElementById('afastamentoPolicial').value;
+        const motivo = document.getElementById('afastamentoMotivo').value;
+        const inicio = document.getElementById('afastamentoInicio').value;
+        const fim = document.getElementById('afastamentoFim').value;
+
+        if (new Date(inicio) > new Date(fim)) {
+            alert('A data de início não pode ser posterior à data de fim.');
+            return;
+        }
+        
+        if (id) {
+            const index = state.afastamentos.findIndex(a => a.id === id);
+            state.afastamentos[index] = { ...state.afastamentos[index], policialId, motivo, inicio, fim };
+        } else {
+            state.afastamentos.push({ id: Date.now().toString(), policialId, motivo, inicio, fim });
+        }
+        
+        saveState();
+        renderAfastamentos();
+        renderCalendar();
+        formAfastamento.reset();
+        document.getElementById('afastamentoId').value = '';
+    });
+    
+    window.editAfastamento = (id) => {
+        const afastamento = state.afastamentos.find(a => a.id === id);
+        document.getElementById('afastamentoId').value = afastamento.id;
+        document.getElementById('afastamentoPolicial').value = afastamento.policialId;
+        document.getElementById('afastamentoMotivo').value = afastamento.motivo;
+        document.getElementById('afastamentoInicio').value = afastamento.inicio;
+        document.getElementById('afastamentoFim').value = afastamento.fim;
+    };
+    
+    window.deleteAfastamento = (id) => {
+        if (confirm('Tem certeza que deseja excluir este afastamento?')) {
+            state.afastamentos = state.afastamentos.filter(a => a.id !== id);
+            saveState();
+            renderAfastamentos();
+            renderCalendar();
+        }
+    };
+
+    // --- LÓGICA DE IMPORTAÇÃO/EXPORTAÇÃO DE DADOS ---
+    
+    const resetImportUI = () => {
+        csvFileInput.value = '';
+        csvFileName.textContent = 'Nenhum arquivo selecionado.';
+        saveImportBtn.textContent = 'Salvar Importação da Planilha';
+        saveImportBtn.disabled = true;
+    };
+
+    const processCsvFile = (file) => {
+        if (!file) return;
+
+        Papa.parse(file, {
+            header: true,
+            skipEmptyLines: true,
+            transformHeader: header => header.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, ''),
+            complete: (results) => {
+                let importedCount = 0;
+                let skipped = { duplicate: 0, invalidData: 0 };
+                const headers = results.meta.fields;
+
+                if (!headers.includes('nomecompleto') && !headers.includes('nome')) {
+                    alert("Erro: A planilha CSV precisa ter uma coluna chamada 'Nome Completo' ou 'Nome'.");
+                    resetImportUI();
+                    return;
+                }
+                if (!headers.includes('equipe')) {
+                    alert("Erro: A planilha CSV precisa ter uma coluna chamada 'Equipe'.");
+                    resetImportUI();
+                    return;
+                }
+
+                results.data.forEach((row) => {
+                    const nome = row.nomecompleto || row.nome;
+                    const equipe = row.equipe;
+                    if (nome && nome.trim() !== '' && equipe && EQUIPES.includes(equipe.trim().toUpperCase())) {
+                        const trimmedNome = nome.trim();
+                        const existing = state.efetivo.find(p => p.nome.trim().toLowerCase() === trimmedNome.toLowerCase());
+                        if (!existing) {
+                            state.efetivo.push({
+                                id: Date.now().toString() + importedCount,
+                                nome: trimmedNome,
+                                equipe: equipe.trim().toUpperCase(),
+                                ordem: (row.ordem || row.ord || '').trim(),
+                                graduacao: (row.graduacao || row.graduacaoposto || '').trim(),
+                                rg: (row.rg || '').trim(),
+                                cpf: (row.cpf || '').trim(),
+                                funcao: (row.funcao || row.funco || '').trim(),
+                                observacao: (row.observacao || row.observao || '').trim()
+                            });
+                            importedCount++;
+                        } else {
+                            skipped.duplicate++;
+                        }
+                    } else {
+                        skipped.invalidData++;
+                    }
+                });
+
+                let summaryMessage = importedCount > 0 ? `${importedCount} policiais importados com sucesso!\n\n` : 'Nenhum policial novo foi importado.\n\n';
+                summaryMessage += `Resumo:\n- ${skipped.duplicate} registros ignorados por serem duplicados.\n- ${skipped.invalidData} registros ignorados por falta de 'Nome', 'Equipe' ou por 'Equipe' inválida.`;
+                alert(summaryMessage);
+                if (importedCount > 0) {
+                    saveState();
+                    renderEfetivo();
+                    renderCalendar();
+                }
+                resetImportUI();
+            },
+            error: (err) => {
+                alert('Ocorreu um erro crítico ao ler o arquivo.');
+                console.error("Erro PapaParse:", err);
+                resetImportUI();
+            }
+        });
+    };
+    
+    const exportData = () => {
+        if (state.efetivo.length === 0 && state.afastamentos.length === 0) {
+            alert("Não há dados para exportar.");
+            return;
+        }
+        const dataStr = JSON.stringify(state, null, 2);
+        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(dataBlob);
+        const link = document.createElement('a');
+        const today = new Date().toISOString().slice(0, 10);
+        link.download = `backup-escala-${today}.json`;
+        link.href = url;
+        link.click();
+        URL.revokeObjectURL(url);
+    };
+
+    const handleDataImport = (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const importedState = JSON.parse(e.target.result);
+                if (importedState && Array.isArray(importedState.efetivo) && Array.isArray(importedState.afastamentos)) {
+                    if (confirm("Isso substituirá todos os dados atuais. Deseja continuar?")) {
+                        state = importedState;
+                        state.currentDate = new Date(); 
+                        saveState();
+                        renderCalendar();
+                        alert("Dados importados com sucesso!");
+                    }
+                } else {
+                    alert("Arquivo inválido ou corrompido.");
+                }
+            } catch (error) {
+                console.error("Erro ao importar dados:", error);
+                alert("Ocorreu um erro ao ler o arquivo.");
+            } finally {
+                importFileInput.value = '';
+            }
+        };
+        reader.readAsText(file);
+    };
+
+    // --- NAVEGAÇÃO, MODAIS E DIVULGAÇÃO ---
+    
+    prevMonthBtn.addEventListener('click', () => {
+        state.currentDate.setMonth(state.currentDate.getMonth() - 1);
+        renderCalendar();
+    });
+
+    nextMonthBtn.addEventListener('click', () => {
+        state.currentDate.setMonth(state.currentDate.getMonth() + 1);
+        renderCalendar();
+    });
+
+    selectCsvBtn.addEventListener('click', () => csvFileInput.click());
+
+    csvFileInput.addEventListener('change', () => {
+        if (csvFileInput.files.length > 0) {
+            csvFileName.textContent = csvFileInput.files[0].name;
+            saveImportBtn.disabled = false;
+        } else {
+            csvFileName.textContent = 'Nenhum arquivo selecionado.';
+            saveImportBtn.disabled = true;
+        }
+    });
+
+    saveImportBtn.addEventListener('click', () => {
+        if (csvFileInput.files.length > 0) {
+            saveImportBtn.textContent = 'Processando...';
+            saveImportBtn.disabled = true;
+            setTimeout(() => processCsvFile(csvFileInput.files[0]), 100);
+        } else {
+            alert('Por favor, selecione um arquivo primeiro.');
+        }
+    });
+
+    exportDataBtn.addEventListener('click', exportData);
+    importDataBtn.addEventListener('click', () => importFileInput.click());
+    importFileInput.addEventListener('change', handleDataImport);
+
+    window.openModal = (modalId) => {
+        if (modalId === 'modalEfetivo') renderEfetivo();
+        if (modalId === 'modalAfastamentos') renderAfastamentos();
+        document.getElementById(modalId).classList.add('active');
+    };
+    
+    window.closeModal = (modalId) => {
+        document.getElementById(modalId).classList.remove('active');
+        clearForm('formEfetivo');
+        clearForm('formAfastamento');
+    };
+    
+    window.clearForm = (formId) => {
+        document.getElementById(formId).reset();
+        const hiddenId = formId === 'formEfetivo' ? 'policialId' : 'afastamentoId';
+        document.getElementById(hiddenId).value = '';
+    };
+    
+    const exportToPDF = async () => {
+        const { jsPDF } = window.jspdf;
+        const startDate = document.getElementById('pdfStartDate').value;
+        const endDate = document.getElementById('pdfEndDate').value;
+
+        if (!startDate || !endDate) {
+            alert('Por favor, selecione a data de início e de fim.');
+            return;
+        }
+
+        const start = new Date(startDate + 'T00:00:00');
+        const end = new Date(endDate + 'T23:59:59');
+
+        if (start > end) {
+            alert('A data de início não pode ser posterior à data de fim.');
+            return;
+        }
+
+        closeModal('modalDivulgar');
+        
+        const tempContainer = document.createElement('div');
+        tempContainer.style.position = 'absolute';
+        tempContainer.style.left = '-9999px';
+        tempContainer.style.width = '800px';
+        tempContainer.style.background = '#fff';
+        document.body.appendChild(tempContainer);
+
+        const doc = new jsPDF();
+        let firstPage = true;
+
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            const date = new Date(d);
+            const cardHtml = getDayCardHtml(date);
+            tempContainer.innerHTML = cardHtml;
+            const elementToCapture = tempContainer.children[0];
+
+            if(!elementToCapture) continue;
+
+            const canvas = await html2canvas(elementToCapture, { scale: 2 });
+            const imgData = canvas.toDataURL('image/png');
+            
+            if (!firstPage) {
+                doc.addPage();
+            }
+            
+            doc.addImage(imgData, 'PNG', 10, 10, 190, 0);
+            firstPage = false;
+        }
+        
+        document.body.removeChild(tempContainer);
+        const today = new Date().toISOString().slice(0, 10);
+        doc.save(`escala-39bpm-${today}.pdf`);
+    };
+
+    const getDayCardHtml = (date) => {
+        const year = date.getFullYear();
+        const month = date.getMonth();
+        const monthName = date.toLocaleString('pt-BR', { month: 'long' });
+        const dia = date.getDate();
+        const diaSemana = date.toLocaleString('pt-BR', { weekday: 'long' }).replace(/^\w/, c => c.toUpperCase());
+        
+        const equipeServico = getEquipeDoDia(date);
+
+        const efetivoDaEquipeOriginal = state.efetivo.filter(p => p.equipe === equipeServico);
+        
+        const ativosNumerados = [];
+        const ativosPlantonistas = [];
+        const afastados = [];
+
+        efetivoDaEquipeOriginal.forEach(policial => {
+            const afastamentoInfo = getAfastamentoInfo(policial.id, date);
+            if (afastamentoInfo) {
+                afastados.push({ ...policial, afastamentoInfo });
+            } else {
+                if (policial.ordem?.toString().toUpperCase() === 'P') {
+                    ativosPlantonistas.push(policial);
+                } else {
+                    ativosNumerados.push(policial);
+                }
+            }
+        });
+
+        ativosNumerados.sort(customSort);
+        ativosPlantonistas.sort((a, b) => a.nome.localeCompare(b.nome));
+        afastados.sort((a, b) => a.nome.localeCompare(b.nome));
+
+        const efetivoDoDiaOrdenado = [...ativosNumerados, ...ativosPlantonistas, ...afastados];
+
+        const tableStyle = "width: 100%; border-collapse: collapse;";
+        const thStyle = "border: 1px solid #ccc; padding: 4px; text-align: left; background-color: #f2f2f2;";
+        const tdStyle = "border: 1px solid #ccc; padding: 4px; text-align: left;";
+        const afastadoStyle = "text-decoration: line-through; color: #999;";
+        
+        let numeroOrdem = 1;
+        let efetivoHtml = efetivoDoDiaOrdenado.map(policial => {
+            const isAfastado = !!policial.afastamentoInfo;
+            const isPlantonista = !isAfastado && policial.ordem?.toString().toUpperCase() === 'P';
+            const observacao = isAfastado ? policial.afastamentoInfo.motivo.toUpperCase() : (policial.observacao || '');
+            
+            let ordemDisplay = '';
+            if (!isAfastado) {
+                if (isPlantonista) {
+                    ordemDisplay = 'P';
+                } else {
+                    ordemDisplay = numeroOrdem++;
+                }
+            }
+            
+            return `
+                <tr style="${isAfastado ? afastadoStyle : ''}">
+                    <td style="${tdStyle}">${ordemDisplay}</td>
+                    <td style="${tdStyle}">${policial.graduacao || ''}</td>
+                    <td style="${tdStyle}">${policial.rg || ''}</td>
+                    <td style="${tdStyle}">${policial.nome}</td>
+                    <td style="${tdStyle}">${policial.cpf || ''}</td>
+                    <td style="${tdStyle}">${policial.funcao || ''}</td>
+                    <td style="${tdStyle}">${observacao}</td>
+                </tr>
+            `;
+        }).join('');
+        
+        if (efetivoDoDiaOrdenado.length === 0) {
+            efetivoHtml = `<tr><td colspan="7" style="${tdStyle}">Nenhum policial nesta equipe.</td></tr>`;
+        }
+
+        return `
+            <div style="border: 1px solid #ddd; border-radius: 8px; margin-bottom: 20px; font-family: sans-serif; font-size: 10px; background: white;">
+                <div style="padding: 8px; text-align: center; font-weight: bold; font-size: 14px; background-color: #e5e7eb; border-top-left-radius: 8px; border-top-right-radius: 8px;">
+                    EQUIPE ${equipeServico}
+                </div>
+                <div style="padding: 6px; text-align: center; font-size: 11px; border-bottom: 1px solid #ddd;">
+                    ${diaSemana}, ${dia} de ${monthName} de ${year}
+                </div>
+                <div style="padding: 6px;">
+                    <table style="${tableStyle}">
+                        <thead>
+                            <tr>
+                                <th style="${thStyle}">ORD.</th>
+                                <th style="${thStyle}">GRADUAÇÃO/POSTO</th>
+                                <th style="${thStyle}">RG</th>
+                                <th style="${thStyle}">NOME COMPLETO</th>
+                                <th style="${thStyle}">CPF</th>
+                                <th style="${thStyle}">FUNÇÃO</th>
+                                <th style="${thStyle}">OBSERVAÇÃO</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${efetivoHtml}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    };
+    
+    // --- PERSISTÊNCIA E INICIALIZAÇÃO ---
+    
+    const saveState = () => localStorage.setItem('escalaBatalhaoState', JSON.stringify(state));
+
+    const loadStateFromLocalStorage = () => {
+        const savedState = localStorage.getItem('escalaBatalhaoState');
+        if (savedState) {
+            const parsedState = JSON.parse(savedState);
+            state = parsedState;
+            state.currentDate = parsedState.currentDate ? new Date(parsedState.currentDate) : new Date();
+        }
+    };
+
+    const initializeApp = () => {
+        loadStateFromLocalStorage();
+        renderCalendar();
+    };
+
+    document.addEventListener('DOMContentLoaded', initializeApp);
+</script>
+
+<script>
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("service-worker.js")
+      .then(() => console.log("✅ Service Worker registrado"))
+      .catch(err => console.log("❌ Erro ao registrar Service Worker:", err));
+  }
+</script>
+</body>
+</html>
